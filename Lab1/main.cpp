@@ -1,4 +1,4 @@
-#include <windows.h>
+﻿#include <windows.h>
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
@@ -22,7 +22,12 @@ void Render();
 
 LRESULT CALLBACK WndProc(HWND, UINT, WPARAM, LPARAM);
 
-int WINAPI wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPWSTR lpCmdLine, int nCmdShow)
+int WINAPI wWinMain(
+    _In_ HINSTANCE hInstance,
+    _In_opt_ HINSTANCE hPrevInstance,
+    _In_ LPWSTR lpCmdLine,
+    _In_ int nCmdShow
+)
 {
     WNDCLASSEX wcex = { sizeof(WNDCLASSEX), CS_HREDRAW | CS_VREDRAW, WndProc, 0, 0, hInstance, nullptr, nullptr, nullptr, nullptr, L"DirectXApp", nullptr };
     RegisterClassEx(&wcex);
@@ -89,7 +94,7 @@ HRESULT InitDevice(HWND hWnd)
 
     DXGI_SWAP_CHAIN_DESC sd;
     ZeroMemory(&sd, sizeof(sd));
-    sd.BufferCount = 1;
+    sd.BufferCount = 2;  // Устанавливаем количество буферов на 2 для использования flip-модели
     sd.BufferDesc.Width = width;
     sd.BufferDesc.Height = height;
     sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -100,6 +105,8 @@ HRESULT InitDevice(HWND hWnd)
     sd.SampleDesc.Count = 1;
     sd.SampleDesc.Quality = 0;
     sd.Windowed = TRUE;
+    sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // Используем flip-модель
+    sd.Flags = 0; // Убираем флаг DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
 
     for (UINT driverTypeIndex = 0; driverTypeIndex < numDriverTypes; driverTypeIndex++)
     {
@@ -115,12 +122,16 @@ HRESULT InitDevice(HWND hWnd)
     ID3D11Texture2D* pBackBuffer = nullptr;
     hr = g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
     if (FAILED(hr))
+    {
         return hr;
+    }
 
     hr = g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_pRenderTargetView);
     pBackBuffer->Release();
     if (FAILED(hr))
+    {
         return hr;
+    }
 
     g_pImmediateContext->OMSetRenderTargets(1, &g_pRenderTargetView, nullptr);
 
@@ -139,10 +150,30 @@ HRESULT InitDevice(HWND hWnd)
 void CleanupDevice()
 {
     if (g_pImmediateContext) g_pImmediateContext->ClearState();
-    if (g_pRenderTargetView) g_pRenderTargetView->Release();
-    if (g_pSwapChain) g_pSwapChain->Release();
-    if (g_pImmediateContext) g_pImmediateContext->Release();
-    if (g_pd3dDevice) g_pd3dDevice->Release();
+
+    if (g_pRenderTargetView)
+    {
+        g_pRenderTargetView->Release();
+        g_pRenderTargetView = nullptr;
+    }
+
+    if (g_pSwapChain)
+    {
+        g_pSwapChain->Release();
+        g_pSwapChain = nullptr;
+    }
+
+    if (g_pImmediateContext)
+    {
+        g_pImmediateContext->Release();
+        g_pImmediateContext = nullptr;
+    }
+
+    if (g_pd3dDevice)
+    {
+        g_pd3dDevice->Release();
+        g_pd3dDevice = nullptr;
+    }
 }
 
 void Render()
@@ -160,14 +191,32 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
     case WM_SIZE:
         if (g_pSwapChain && wParam != SIZE_MINIMIZED)
         {
-            if (g_pRenderTargetView) g_pRenderTargetView->Release();
+            if (g_pRenderTargetView)
+            {
+                g_pRenderTargetView->Release();
+                g_pRenderTargetView = nullptr;
+            }
 
-            g_pSwapChain->ResizeBuffers(0, LOWORD(lParam), HIWORD(lParam), DXGI_FORMAT_UNKNOWN, 0);
+            HRESULT hr = g_pSwapChain->ResizeBuffers(0, LOWORD(lParam), HIWORD(lParam), DXGI_FORMAT_UNKNOWN, 0);
+            if (FAILED(hr))
+            {
+                return DefWindowProc(hWnd, message, wParam, lParam);
+            }
 
             ID3D11Texture2D* pBackBuffer = nullptr;
-            g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
-            g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_pRenderTargetView);
-            pBackBuffer->Release();
+            hr = g_pSwapChain->GetBuffer(0, __uuidof(ID3D11Texture2D), (LPVOID*)&pBackBuffer);
+            if (SUCCEEDED(hr))
+            {
+                hr = g_pd3dDevice->CreateRenderTargetView(pBackBuffer, nullptr, &g_pRenderTargetView);
+                pBackBuffer->Release();
+            }
+
+            if (FAILED(hr))
+            {
+                return DefWindowProc(hWnd, message, wParam, lParam);
+            }
+
+            g_pImmediateContext->OMSetRenderTargets(1, &g_pRenderTargetView, nullptr);
 
             D3D11_VIEWPORT vp;
             vp.Width = (FLOAT)LOWORD(lParam);
