@@ -19,12 +19,4 @@
       <Filter>Исходные файлы</Filter>
     </ClCompile>
   </ItemGroup>
-  <ItemGroup>
-    <FxCompile Include="pixelShader.hlsl">
-      <Filter>Исходные файлы</Filter>
-    </FxCompile>
-    <FxCompile Include="vertexShader.hlsl">
-      <Filter>Исходные файлы</Filter>
-    </FxCompile>
-  </ItemGroup>
 </Project>

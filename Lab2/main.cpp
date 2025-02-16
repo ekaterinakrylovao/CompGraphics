@@ -2,6 +2,7 @@
 #include <d3d11.h>
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
+#include <string>
 
 #pragma comment(lib, "d3d11.lib")
 #pragma comment(lib, "d3dcompiler.lib")
@@ -20,6 +21,42 @@ ID3D11VertexShader* g_pVertexShader = nullptr;
 ID3D11PixelShader* g_pPixelShader = nullptr;
 ID3D11InputLayout* g_pVertexLayout = nullptr;
 ID3D11Buffer* g_pVertexBuffer = nullptr;
+
+// Встроенные шейдеры
+const char* vertexShaderCode = R"(
+struct VS_INPUT
+{
+    float4 Pos : POSITION;
+    float4 Color : COLOR;
+};
+
+struct PS_INPUT
+{
+    float4 Pos : SV_POSITION;
+    float4 Color : COLOR;
+};
+
+PS_INPUT main(VS_INPUT input)
+{
+    PS_INPUT output;
+    output.Pos = input.Pos;
+    output.Color = input.Color;
+    return output;
+}
+)";
+
+const char* pixelShaderCode = R"(
+struct PS_INPUT
+{
+    float4 Pos : SV_POSITION;
+    float4 Color : COLOR;
+};
+
+float4 main(PS_INPUT input) : SV_Target
+{
+    return input.Color;
+}
+)";
 
 // Определение структуры вершины
 struct SimpleVertex
@@ -106,7 +143,7 @@ HRESULT InitDevice(HWND hWnd)
 
     DXGI_SWAP_CHAIN_DESC sd;
     ZeroMemory(&sd, sizeof(sd));
-    sd.BufferCount = 2;  // Устанавливаем количество буферов на 2 для использования flip-модели
+    sd.BufferCount = 2;
     sd.BufferDesc.Width = width;
     sd.BufferDesc.Height = height;
     sd.BufferDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -117,8 +154,8 @@ HRESULT InitDevice(HWND hWnd)
     sd.SampleDesc.Count = 1;
     sd.SampleDesc.Quality = 0;
     sd.Windowed = TRUE;
-    sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD; // Используем flip-модель
-    sd.Flags = 0; // Убираем флаг DXGI_SWAP_CHAIN_FLAG_ALLOW_MODE_SWITCH
+    sd.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
+    sd.Flags = 0;
 
     for (UINT driverTypeIndex = 0; driverTypeIndex < numDriverTypes; driverTypeIndex++)
     {
@@ -158,10 +195,10 @@ HRESULT InitDevice(HWND hWnd)
 
     // Компиляция вершинного шейдера
     ID3DBlob* pVSBlob = nullptr;
-    hr = D3DCompileFromFile(L"vertexShader.hlsl", nullptr, nullptr, "main", "vs_5_0", 0, 0, &pVSBlob, nullptr);
+    hr = D3DCompile(vertexShaderCode, strlen(vertexShaderCode), "vertexShader", nullptr, nullptr, "main", "vs_5_0", 0, 0, &pVSBlob, nullptr);
     if (FAILED(hr))
     {
-        MessageBox(nullptr, L"Ошибка компиляции вершинного шейдера", L"Ошибка", MB_OK);
+        MessageBox(hWnd, L"Ошибка компиляции вершинного шейдера", L"Ошибка", MB_OK);
         return hr;
     }
 
@@ -169,22 +206,6 @@ HRESULT InitDevice(HWND hWnd)
     if (FAILED(hr))
     {
         pVSBlob->Release();
-        return hr;
-    }
-
-    // Компиляция пиксельного шейдера
-    ID3DBlob* pPSBlob = nullptr;
-    hr = D3DCompileFromFile(L"pixelShader.hlsl", nullptr, nullptr, "main", "ps_5_0", 0, 0, &pPSBlob, nullptr);
-    if (FAILED(hr))
-    {
-        MessageBox(nullptr, L"Ошибка компиляции пиксельного шейдера", L"Ошибка", MB_OK);
-        return hr;
-    }
-
-    hr = g_pd3dDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &g_pPixelShader);
-    if (FAILED(hr))
-    {
-        pPSBlob->Release();
         return hr;
     }
 
@@ -227,6 +248,22 @@ HRESULT InitDevice(HWND hWnd)
     hr = g_pd3dDevice->CreateBuffer(&bd, &InitData, &g_pVertexBuffer);
     if (FAILED(hr))
     {
+        return hr;
+    }
+
+    // Компиляция пиксельного шейдера
+    ID3DBlob* pPSBlob = nullptr;
+    hr = D3DCompile(pixelShaderCode, strlen(pixelShaderCode), "pixelShader", nullptr, nullptr, "main", "ps_5_0", 0, 0, &pPSBlob, nullptr);
+    if (FAILED(hr))
+    {
+        MessageBox(hWnd, L"Ошибка компиляции пиксельного шейдера", L"Ошибка", MB_OK);
+        return hr;
+    }
+
+    hr = g_pd3dDevice->CreatePixelShader(pPSBlob->GetBufferPointer(), pPSBlob->GetBufferSize(), nullptr, &g_pPixelShader);
+    if (FAILED(hr))
+    {
+        pPSBlob->Release();
         return hr;
     }
 
